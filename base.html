@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Personal Finance Advisor Bot{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<!-- Ambient Glowing Background Elements -->
+<div class="ambient-bg" aria-hidden="true">
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+  <div class="glow-orb orb-3"></div>
+  <div class="glow-orb orb-4"></div>
+</div>
+
+<!-- Header Navigation Bar -->
+<header class="header">
+  <div class="header-left">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      <div class="logo-box">
+        <span class="logo-symbol">₹</span>
+        <span class="logo-spark">✨</span>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">Finance<span class="brand-accent">Advisor</span></span>
+        <span class="brand-badge">PRO</span>
+      </div>
+    </a>
+
+    <!-- Live Date & Clock Widget -->
+    <div class="header-clock" id="liveClock" title="Current system time">
+      <span class="clock-icon">🕒</span>
+      <span class="clock-text">Loading time...</span>
+    </div>
+  </div>
+
+  <nav class="nav-links">
+    <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+      <span class="nav-icon">📊</span>
+      <span>Dashboard</span>
+    </a>
+    <a class="nav-link {% if request.endpoint == 'reports' %}active{% endif %}" href="{{ url_for('reports') }}">
+      <span class="nav-icon">📈</span>
+      <span>Reports & Analytics</span>
+    </a>
+    <a class="nav-link" href="{{ url_for('export_csv') }}" title="Download transaction data">
+      <span class="nav-icon">📥</span>
+      <span>Export CSV</span>
+    </a>
+
+    <!-- Quick Modal Action -->
+    <button class="btn-quick-add" onclick="openTxModal()" title="Add new transaction">
+      <span>+</span> Add
+    </button>
+
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch dark/light mode" aria-label="Toggle Theme">
+      <span class="theme-icon-light">☀️</span>
+      <span class="theme-icon-dark">🌙</span>
+    </button>
+
+    <!-- AI Bot Trigger -->
+    <button class="nav-btn chat-trigger" onclick="toggleChatDrawer(true)">
+      <span class="pulse-dot"></span>
+      <span class="bot-label">🤖 AI Bot</span>
+    </button>
+  </nav>
+</header>
+
+<!-- Toast Notifications -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="toast-wrap" id="toast-wrap">
+    {% for category, message in messages %}
+      <div class="toast {{ category }}">
+        <span class="toast-icon">
+          {% if category == 'success' %}✅{% else %}⚠️{% endif %}
+        </span>
+        <span class="toast-message">{{ message }}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+      </div>
+    {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<!-- Main Content Area -->
+<main class="page">
+  {% block content %}{% endblock %}
+</main>
+
+<!-- Floating AI Bot Launcher -->
+<button class="floating-chat-btn" onclick="toggleChatDrawer(true)" title="Open AI Personal Finance Advisor">
+  <div class="chat-btn-inner">
+    <span class="chat-icon">💬</span>
+    <span class="chat-text">AI Advisor Bot</span>
+    <span class="online-indicator"></span>
+  </div>
+</button>
+
+<!-- Quick Add Transaction Glass Modal -->
+<div class="modal-overlay" id="txModalOverlay" onclick="closeTxModal(event)">
+  <div class="modal-card" id="txModalCard">
+    <div class="modal-head">
+      <div class="modal-title-group">
+        <div class="modal-icon">💳</div>
+        <div>
+          <h3>Quick Add Transaction</h3>
+          <p class="modal-subtitle">Log income or expense with category and note</p>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeTxModal(null)">✕</button>
+    </div>
+
+    <form method="post" action="{{ url_for('add_transaction') }}" class="modal-form" id="quickAddForm">
+      <!-- Kind Selector Tabs -->
+      <div class="kind-segmented-control">
+        <label class="segment-label">
+          <input type="radio" name="kind" value="expense" checked onchange="onModalKindChange('expense')">
+          <span class="segment-btn expense-btn">💸 Expense</span>
+        </label>
+        <label class="segment-label">
+          <input type="radio" name="kind" value="income" onchange="onModalKindChange('income')">
+          <span class="segment-btn income-btn">💰 Income</span>
+        </label>
+      </div>
+
+      <!-- Quick Preset Amounts -->
+      <div class="quick-amount-chips">
+        <button type="button" class="amt-chip" onclick="setQuickAmount(100)">+₹100</button>
+        <button type="button" class="amt-chip" onclick="setQuickAmount(500)">+₹500</button>
+        <button type="button" class="amt-chip" onclick="setQuickAmount(1000)">+₹1,000</button>
+        <button type="button" class="amt-chip" onclick="setQuickAmount(2500)">+₹2,500</button>
+        <button type="button" class="amt-chip" onclick="setQuickAmount(5000)">+₹5,000</button>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label class="form-label">Amount (₹)</label>
+          <div class="input-with-symbol">
+            <span class="currency-glyph">₹</span>
+            <input type="number" name="amount" id="modalAmount" step="0.01" min="0.01" placeholder="0.00" required>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Category</label>
+          <select name="category" id="modalCategory" class="input-select" required>
+            <option value="Food">🍔 Food & Dining</option>
+            <option value="Rent">🏠 Rent & Housing</option>
+            <option value="Transport">🚗 Transport & Fuel</option>
+            <option value="Shopping">🛍️ Shopping & Apparel</option>
+            <option value="Utilities">⚡ Utilities & Bills</option>
+            <option value="Entertainment">🎬 Entertainment</option>
+            <option value="Healthcare">🏥 Healthcare & Meds</option>
+            <option value="Education">🎓 Education & Books</option>
+            <option value="Bills">📄 Recurring Bills</option>
+            <option value="Other">🏷️ Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label class="form-label">Date</label>
+          <input type="date" name="date" id="modalDate" value="{{ today_str or '' }}" required>
+        </div>
+        <div>
+          <label class="form-label">Description / Note</label>
+          <input type="text" name="note" id="modalNote" placeholder="e.g. Grocery trip, Dinner, etc.">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn ghost" onclick="closeTxModal(null)">Cancel</button>
+        <button type="submit" class="btn primary btn-glow">+ Record Transaction</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- AI Chat Drawer Modal -->
+<div class="chat-overlay" id="chatOverlay" onclick="toggleChatDrawer(false)"></div>
+<aside class="chat-drawer" id="chatDrawer" aria-label="Personal Finance AI Advisor">
+  <div class="chat-drawer-header">
+    <div class="chat-bot-info">
+      <div class="bot-avatar-glow">🤖</div>
+      <div>
+        <h3>Finance Advisor Bot</h3>
+        <p class="bot-status"><span class="status-online"></span> AI Intelligence Active • Dual Engine</p>
+      </div>
+    </div>
+    <div class="drawer-header-actions">
+      <button class="drawer-action-btn" onclick="clearChatHistory()" title="Clear chat history">🗑️</button>
+      <button class="drawer-close" onclick="toggleChatDrawer(false)" aria-label="Close Chat">✕</button>
+    </div>
+  </div>
+
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-msg bot">
+      <div class="msg-avatar">🤖</div>
+      <div class="msg-bubble">
+        <strong>Hello! I'm your Personal Finance Advisor Bot.</strong> ✨
+        <br><br>
+        I have full visibility into your live income, expenses, budgets, and savings goals. Ask me anything or select a prompt below!
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-suggestions">
+    <button class="chip" onclick="sendSuggestedQuery('Analyze my 50/30/20 budget')">📊 50/30/20 Rule</button>
+    <button class="chip" onclick="sendSuggestedQuery('How can I save more money this month?')">💡 How to save</button>
+    <button class="chip" onclick="sendSuggestedQuery('Check my budget status and spending caps')">📋 Budget health</button>
+    <button class="chip" onclick="sendSuggestedQuery('Can I afford a ₹15,000 expense?')">🛍️ Can I afford?</button>
+    <button class="chip" onclick="sendSuggestedQuery('Give me an overall financial summary')">📈 Health Check</button>
+  </div>
+
+  <form class="chat-input-area" id="chatForm" onsubmit="handleChatSubmit(event)">
+    <input type="text" id="chatInput" placeholder="Ask about budgets, goals, or affordability..." autocomplete="off" required>
+    <button type="submit" class="chat-send-btn" id="chatSendBtn" title="Send message">
+      <span>Send</span>
+      <span class="send-arrow">➔</span>
+    </button>
+  </form>
+</aside>
+
+<!-- Modern Footer -->
+<footer class="site-footer">
+  <div class="footer-wrap">
+    <div class="footer-brand">
+      <div class="logo-box small">
+        <span class="logo-symbol">₹</span>
+      </div>
+      <span>Personal Finance Advisor Bot</span>
+    </div>
+    <p class="footer-tagline">Intelligent money tracking, automated budgeting, and AI financial advisory in one unified workspace.</p>
+    <div class="footer-meta">
+      <span>Flask 3.1.2</span> • <span>SQLite & SQLAlchemy</span> • <span>Chart.js Visualization</span> • <span>Google Gemini & Local Expert AI</span>
+    </div>
+  </div>
+</footer>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

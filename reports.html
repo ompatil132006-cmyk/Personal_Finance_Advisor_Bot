@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+{% block title %}Reports & Analytics • Personal Finance Advisor Bot{% endblock %}
+{% block content %}
+
+<!-- Header Title Banner -->
+<div class="page-title-banner">
+  <div>
+    <div class="page-eyebrow">
+      <span class="badge-pulse"></span>
+      <span>FINANCIAL ANALYTICS & INSIGHTS</span>
+    </div>
+    <h1 class="page-heading">Financial Reports & Cash Flow Trends</h1>
+    <p class="page-description">Deep dive into your category spending patterns, budget discipline, and 50/30/20 balance.</p>
+  </div>
+  <div class="page-actions-group">
+    <a class="btn btn-secondary-compact" href="{{ url_for('export_csv') }}">📥 Export CSV</a>
+    <button class="btn btn-primary-compact" onclick="toggleChatDrawer(true)">🤖 Consult AI Bot</button>
+  </div>
+</div>
+
+<!-- Overview Stats Cards -->
+<section class="stats-grid">
+  <div class="stat-card stat-income">
+    <div class="stat-icon-wrap bg-green-soft">
+      <span class="stat-icon">💰</span>
+    </div>
+    <div class="stat-details">
+      <span class="stat-label">Total Inflow</span>
+      <div class="stat-num-row">
+        <strong class="stat-amount text-green">₹{{ "%.0f"|format(income) }}</strong>
+        <span class="stat-trend trend-up">100% Inflow</span>
+      </div>
+      <small class="stat-helper">All recorded earnings</small>
+    </div>
+  </div>
+
+  <div class="stat-card stat-expense">
+    <div class="stat-icon-wrap bg-red-soft">
+      <span class="stat-icon">💳</span>
+    </div>
+    <div class="stat-details">
+      <span class="stat-label">Total Outflow</span>
+      <div class="stat-num-row">
+        <strong class="stat-amount text-red">₹{{ "%.0f"|format(expense) }}</strong>
+        <span class="stat-trend trend-down">{{ expense_ratio }}% Ratio</span>
+      </div>
+      <small class="stat-helper">Spend relative to income</small>
+    </div>
+  </div>
+
+  <div class="stat-card stat-balance">
+    <div class="stat-icon-wrap bg-blue-soft">
+      <span class="stat-icon">⚖️</span>
+    </div>
+    <div class="stat-details">
+      <span class="stat-label">Net Surplus</span>
+      <div class="stat-num-row">
+        <strong class="stat-amount {{ 'text-green' if balance >= 0 else 'text-red' }}">
+          {{ '+' if balance > 0 else '' }}₹{{ "%.0f"|format(balance) }}
+        </strong>
+        <span class="stat-trend {{ 'trend-surplus' if balance >= 0 else 'trend-deficit' }}">
+          {{ 'Surplus' if balance >= 0 else 'Deficit' }}
+        </span>
+      </div>
+      <small class="stat-helper">Available to fund savings</small>
+    </div>
+  </div>
+
+  <div class="stat-card stat-savings">
+    <div class="stat-icon-wrap bg-purple-soft">
+      <span class="stat-icon">🎯</span>
+    </div>
+    <div class="stat-details">
+      <span class="stat-label">Savings Rate</span>
+      <div class="stat-num-row">
+        <strong class="stat-amount {% if savings_rate >= 20 %}text-green{% elif savings_rate > 0 %}text-amber{% else %}text-muted{% endif %}">
+          {{ savings_rate }}%
+        </strong>
+        <span class="stat-target-badge">Goal: ≥ 20%</span>
+      </div>
+      <small class="stat-helper">50/30/20 target recommendation</small>
+    </div>
+  </div>
+</section>
+
+<!-- Visual Analytics Charts Grid -->
+<div class="two-col-grid">
+  <!-- Category Spending Doughnut Chart -->
+  <section class="glass-card chart-card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-badge-icon">🍩</div>
+        <div>
+          <h2>Expenses by Category</h2>
+          <span class="card-description">Interactive breakdown of spending distribution</span>
+        </div>
+      </div>
+    </div>
+    {% if expense > 0 %}
+      <div class="chart-box">
+        <canvas id="spendingChart"></canvas>
+      </div>
+    {% else %}
+      <div class="empty-state-box py-8">
+        <span class="empty-icon">📊</span>
+        <p class="empty-title">No expense data recorded</p>
+        <small class="empty-sub">Add expenses on the <a href="{{ url_for('dashboard') }}">Dashboard</a> to see category distribution.</small>
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- Cash Flow Summary Bar Chart -->
+  <section class="glass-card chart-card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-badge-icon">📊</div>
+        <div>
+          <h2>Cash Flow Comparison</h2>
+          <span class="card-description">Income vs Expenses vs Retained Surplus</span>
+        </div>
+      </div>
+    </div>
+    {% if income > 0 or expense > 0 %}
+      <div class="chart-box">
+        <canvas id="cashflowChart"></canvas>
+      </div>
+    {% else %}
+      <div class="empty-state-box py-8">
+        <span class="empty-icon">📉</span>
+        <p class="empty-title">No financial records to display</p>
+        <small class="empty-sub">Record income and expenses on the dashboard to visualize cash flow.</small>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+<!-- Budget vs Actual Spending Comparison -->
+<section class="glass-card">
+  <div class="card-header">
+    <div class="card-header-left">
+      <div class="card-badge-icon">⚖️</div>
+      <div>
+        <h2>Budget Limits vs. Actual Spending</h2>
+        <span class="card-description">Track how closely your expenses adhere to configured limits</span>
+      </div>
+    </div>
+    <span class="pill-chip">Discipline Metric</span>
+  </div>
+  {% if budget_labels %}
+    <div class="chart-box-wide">
+      <canvas id="budgetComparisonChart"></canvas>
+    </div>
+  {% else %}
+    <div class="empty-state-box py-6">
+      <span class="empty-icon">🎯</span>
+      <p class="empty-title">No budgets configured</p>
+      <small class="empty-sub">Head over to the <a href="{{ url_for('dashboard') }}">Dashboard</a> to configure category budget caps.</small>
+    </div>
+  {% endif %}
+</section>
+
+<!-- Insights & 50/30/20 Benchmark Section -->
+<div class="two-col-grid">
+  <!-- Report Insights -->
+  <section class="glass-card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-badge-icon">💡</div>
+        <div>
+          <h2>Automated Financial Insights</h2>
+          <span class="card-description">Real-time alerts and smart recommendations</span>
+        </div>
+      </div>
+      <span class="pill-chip blue">Algorithmic</span>
+    </div>
+    <div class="insights-stack">
+      {% for x in insights %}
+        <div class="insight-row">
+          <div class="insight-icon-dot">📌</div>
+          <div class="insight-content">{{ x }}</div>
+        </div>
+      {% else %}
+        <p class="muted-text">Record transactions to generate customized financial recommendations.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- 50/30/20 Guideline Card -->
+  <section class="glass-card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-badge-icon">📘</div>
+        <div>
+          <h2>50/30/20 Health Benchmark</h2>
+          <span class="card-description">Target budget distribution based on your income</span>
+        </div>
+      </div>
+      <span class="pill-chip green">Guideline</span>
+    </div>
+
+    <div class="health-guide-stack">
+      <div class="guide-box">
+        <div class="guide-box-header">
+          <div class="guide-box-title">
+            <span class="guide-dot dot-needs"></span>
+            <strong>50% Needs (Essential)</strong>
+          </div>
+          <span class="guide-target-amount">
+            {% if income > 0 %}₹{{ "%.0f"|format(income * 0.50) }}{% else %}—{% endif %}
+          </span>
+        </div>
+        <p class="guide-box-desc">Housing (rent/mortgage), groceries, transport, utilities, and healthcare.</p>
+      </div>
+
+      <div class="guide-box">
+        <div class="guide-box-header">
+          <div class="guide-box-title">
+            <span class="guide-dot dot-wants"></span>
+            <strong>30% Wants (Discretionary)</strong>
+          </div>
+          <span class="guide-target-amount">
+            {% if income > 0 %}₹{{ "%.0f"|format(income * 0.30) }}{% else %}—{% endif %}
+          </span>
+        </div>
+        <p class="guide-box-desc">Dining out, entertainment, shopping, travel, and personal subscriptions.</p>
+      </div>
+
+      <div class="guide-box">
+        <div class="guide-box-header">
+          <div class="guide-box-title">
+            <span class="guide-dot dot-savings"></span>
+            <strong>20% Savings & Debt Prepayment</strong>
+          </div>
+          <span class="guide-target-amount">
+            {% if income > 0 %}₹{{ "%.0f"|format(income * 0.20) }}{% else %}—{% endif %}
+          </span>
+        </div>
+        <p class="guide-box-desc">Emergency fund cushion, mutual funds, investments, and savings goals.</p>
+      </div>
+    </div>
+
+    <button class="btn btn-consult-bot mt-4" onclick="toggleChatDrawer(true)">
+      <span>Ask AI Bot to evaluate my 50/30/20</span>
+      <span class="action-arrow">➔</span>
+    </button>
+  </section>
+</div>
+
+<!-- Chart.js Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const chartColors = [
+    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+    '#06b6d4', '#ec4899', '#6366f1', '#14b8a6', '#f97316'
+  ];
+
+  // 1. Spending Doughnut Chart
+  const expenseLabels = {{ labels|tojson }};
+  const expenseValues = {{ values|tojson }};
+  const spendingCanvas = document.getElementById("spendingChart");
+
+  if (spendingCanvas && expenseValues.some(v => v > 0)) {
+    new Chart(spendingCanvas, {
+      type: "doughnut",
+      data: {
+        labels: expenseLabels,
+        datasets: [{
+          data: expenseValues,
+          backgroundColor: chartColors.slice(0, expenseLabels.length),
+          borderWidth: 3,
+          borderColor: document.documentElement.getAttribute("data-theme") === "dark" ? "#1e293b" : "#ffffff",
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              boxWidth: 12,
+              padding: 14,
+              font: { family: "'Plus Jakarta Sans', sans-serif", size: 12 }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                const val = ctx.raw || 0;
+                const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                return ` ${ctx.label}: ₹${val.toLocaleString()} (${pct}%)`;
+              }
+            }
+          }
+        },
+        cutout: "68%"
+      }
+    });
+  }
+
+  // 2. Cash Flow Comparison Bar Chart
+  const cashflowCanvas = document.getElementById("cashflowChart");
+  if (cashflowCanvas) {
+    const incomeVal = {{ income }};
+    const expenseVal = {{ expense }};
+    const balanceVal = {{ balance }};
+
+    new Chart(cashflowCanvas, {
+      type: "bar",
+      data: {
+        labels: ["Total Income", "Total Expenses", "Net Savings"],
+        datasets: [{
+          label: "Amount (₹)",
+          data: [incomeVal, expenseVal, Math.max(0, balanceVal)],
+          backgroundColor: ["#10b981", "#ef4444", "#3b82f6"],
+          borderRadius: 8,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return ` ₹${(ctx.raw || 0).toLocaleString()}`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: {
+              color: "rgba(148, 163, 184, 0.15)"
+            },
+            ticks: {
+              callback: function(val) { return '₹' + val.toLocaleString(); }
+            }
+          },
+          x: {
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  // 3. Budget vs Actual Grouped Bar Chart
+  const budgetCanvas = document.getElementById("budgetComparisonChart");
+  const budgetLabels = {{ budget_labels|tojson }};
+  const budgetLimits = {{ budget_limits|tojson }};
+  const budgetActuals = {{ budget_actuals|tojson }};
+
+  if (budgetCanvas && budgetLabels.length > 0) {
+    new Chart(budgetCanvas, {
+      type: "bar",
+      data: {
+        labels: budgetLabels,
+        datasets: [
+          {
+            label: "Budget Ceiling (₹)",
+            data: budgetLimits,
+            backgroundColor: "rgba(59, 130, 246, 0.35)",
+            borderColor: "#3b82f6",
+            borderWidth: 1.5,
+            borderRadius: 6
+          },
+          {
+            label: "Actual Spent (₹)",
+            data: budgetActuals,
+            backgroundColor: budgetActuals.map((spent, idx) => spent > budgetLimits[idx] ? "#ef4444" : "#10b981"),
+            borderRadius: 6
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "top",
+            labels: {
+              boxWidth: 14,
+              font: { family: "'Plus Jakarta Sans', sans-serif", size: 12 }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return ` ${ctx.dataset.label}: ₹${(ctx.raw || 0).toLocaleString()}`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: {
+              color: "rgba(148, 163, 184, 0.15)"
+            },
+            ticks: {
+              callback: function(val) { return '₹' + val.toLocaleString(); }
+            }
+          },
+          x: {
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+});
+</script>
+
+{% endblock %}

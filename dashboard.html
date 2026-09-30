@@ -1,0 +1,567 @@
+{% extends "base.html" %}
+{% block title %}Dashboard • Personal Finance Advisor Bot{% endblock %}
+{% block content %}
+
+{% set cat_icons = {
+  'Food': '🍔', 'Rent': '🏠', 'Transport': '🚗', 'Education': '🎓',
+  'Entertainment': '🎬', 'Healthcare': '🏥', 'Shopping': '🛍️',
+  'Utilities': '⚡', 'Bills': '📄', 'Salary': '💰', 'Freelance': '💻',
+  'Investment': '📈', 'Other': '🏷️'
+} %}
+
+<!-- Modern FinTech Hero Banner -->
+<section class="hero-fintech">
+  <div class="hero-left">
+    <div class="hero-badge">
+      <span class="badge-pulse"></span>
+      <span>FINANCIAL INTELLIGENCE SYSTEM</span>
+    </div>
+    <h1 class="hero-heading">Welcome to your Financial Command Center.</h1>
+    <p class="hero-subtext">
+      Monitor cash flow, stay within category spending caps, build toward your savings goals, and consult your dedicated AI Advisor Bot anytime.
+    </p>
+
+    <div class="hero-action-row">
+      <button class="btn btn-hero-primary" onclick="toggleChatDrawer(true)">
+        <span class="btn-icon">💬</span>
+        <span>Chat with AI Bot</span>
+      </button>
+      <button class="btn btn-hero-glass" onclick="openTxModal()">
+        <span class="btn-icon">+</span>
+        <span>Quick Add Transaction</span>
+      </button>
+      <button class="btn btn-hero-ghost" onclick="getAIAdvice()">
+        <span class="btn-icon">✨</span>
+        <span>Refresh Advice</span>
+      </button>
+      {% if total_tx_count == 0 %}
+      <a href="{{ url_for('seed_demo_route') }}" class="btn btn-hero-seed" title="Seed realistic demo data to explore immediately">
+        <span class="btn-icon">⚡</span>
+        <span>Load Demo Data</span>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Financial Health Score Widget -->
+  <div class="hero-right">
+    <div class="health-card">
+      <div class="health-card-head">
+        <span class="health-title">Financial Health</span>
+        <span class="health-badge-status {% if balance >= 0 and income > 0 and (balance/income) >= 0.2 %}status-excellent{% elif balance >= 0 %}status-good{% else %}status-alert{% endif %}">
+          {% if balance >= 0 and income > 0 and (balance/income) >= 0.2 %}Excellent{% elif balance >= 0 %}Good Standing{% else %}Attention Needed{% endif %}
+        </span>
+      </div>
+
+      <div class="health-gauge-wrap">
+        <div class="health-score-number">
+          {% if income > 0 %}
+            {% set score = (min(100, max(10, ((balance/income)*50) + 50)))|int %}
+            <span class="big-score">{{ score }}</span>
+            <span class="score-denom">/100</span>
+          {% else %}
+            <span class="big-score">—</span>
+          {% endif %}
+        </div>
+        <p class="health-desc">
+          {% if income > 0 and balance >= 0 %}
+            Saving <strong>{{ "%.0f"|format((balance/income)*100) }}%</strong> of total monthly income.
+          {% elif balance < 0 %}
+            Expenses exceed recorded earnings by ₹{{ "%.0f"|format(balance|abs) }}.
+          {% else %}
+            Record your income and expenses to calculate your rating.
+          {% endif %}
+        </p>
+      </div>
+
+      <div class="health-mini-metrics">
+        <div class="mini-metric">
+          <span class="mini-label">Budgets</span>
+          <span class="mini-val">{{ budgets|length }} Active</span>
+        </div>
+        <div class="mini-divider"></div>
+        <div class="mini-metric">
+          <span class="mini-label">Goals</span>
+          <span class="mini-val">{{ goals|length }} Milestones</span>
+        </div>
+        <div class="mini-divider"></div>
+        <div class="mini-metric">
+          <span class="mini-label">Transactions</span>
+          <span class="mini-val">{{ total_tx_count }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Overview Statistics Grid -->
+<section class="stats-grid">
+  <!-- Income Card -->
+  <div class="stat-card stat-income">
+    <div class="stat-icon-wrap bg-green-soft">
+      <span class="stat-icon">💰</span>
+    </div>
+    <div class="stat-details">
+      <span class="stat-label">Total Income</span>
+      <div class="stat-num-row">
+        <strong class="stat-amount text-green">₹{{ "%.0f"|format(income) }}</strong>
+        <span class="stat-trend trend-up">↗ Inflow</span>
+      </div>
+      <small class="stat-helper">Across {{ transactions|selectattr('kind', 'equalto', 'income')|list|length }} recorded income deposits</small>
+    </div>
+  </div>
+
+  <!-- Expenses Card -->
+  <div class="stat-card stat-expense">
+    <div class="stat-icon-wrap bg-red-soft">
+      <span class="stat-icon">💳</span>
+    </div>
+    <div class="stat-details">
+      <span class="stat-label">Total Expenses</span>
+      <div class="stat-num-row">
+        <strong class="stat-amount text-red">₹{{ "%.0f"|format(expense) }}</strong>
+        <span class="stat-trend trend-down">↘ Outflow</span>
+      </div>
+      <small class="stat-helper">
+        {% if income > 0 %}
+          {{ "%.0f"|format((expense/income)*100) }}% of recorded income
+        {% else %}
+          Across recorded categories
+        {% endif %}
+      </small>
+    </div>
+  </div>
+
+  <!-- Net Balance Card -->
+  <div class="stat-card stat-balance">
+    <div class="stat-icon-wrap bg-blue-soft">
+      <span class="stat-icon">⚖️</span>
+    </div>
+    <div class="stat-details">
+      <span class="stat-label">Net Balance</span>
+      <div class="stat-num-row">
+        <strong class="stat-amount {{ 'text-green' if balance >= 0 else 'text-red' }}">
+          {{ '+' if balance > 0 else '' }}₹{{ "%.0f"|format(balance) }}
+        </strong>
+        <span class="stat-trend {{ 'trend-surplus' if balance >= 0 else 'trend-deficit' }}">
+          {{ 'Surplus' if balance >= 0 else 'Deficit' }}
+        </span>
+      </div>
+      <small class="stat-helper">Available liquidity for savings & goals</small>
+    </div>
+  </div>
+
+  <!-- Savings Rate Card -->
+  <div class="stat-card stat-savings">
+    <div class="stat-icon-wrap bg-purple-soft">
+      <span class="stat-icon">🎯</span>
+    </div>
+    <div class="stat-details">
+      <span class="stat-label">Savings Rate</span>
+      <div class="stat-num-row">
+        <strong class="stat-amount {% if income and (balance/income) >= 0.2 %}text-green{% elif income and (balance/income) > 0 %}text-amber{% else %}text-muted{% endif %}">
+          {% if income %}{{ "%.0f"|format((balance/income)*100) }}%{% else %}0%{% endif %}
+        </strong>
+        <span class="stat-target-badge">Target: 20%+</span>
+      </div>
+      <small class="stat-helper">Benchmarked against the 50/30/20 principle</small>
+    </div>
+  </div>
+</section>
+
+<!-- Top Two-Column Grid: AI Insights & Quick Transaction Form -->
+<div class="two-col-grid">
+  <!-- AI Insights Card -->
+  <section class="glass-card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-badge-icon">💡</div>
+        <div>
+          <h2>Financial Insights & AI Advice</h2>
+          <span class="card-description">Algorithmic spending pattern detection & recommendations</span>
+        </div>
+      </div>
+      <button class="btn-refresh" onclick="getAIAdvice()" title="Fetch fresh advice">
+        <span class="refresh-icon">🔄</span>
+        <span>Refresh</span>
+      </button>
+    </div>
+
+    <div id="advice" class="insights-stack">
+      {% for tip in insights %}
+        <div class="insight-row">
+          <div class="insight-icon-dot">💡</div>
+          <div class="insight-content">{{ tip }}</div>
+        </div>
+      {% else %}
+        <p class="muted-text">Add your income and expenses to generate personalized algorithmic insights.</p>
+      {% endfor %}
+    </div>
+
+    <div class="card-action-bar">
+      <button class="btn btn-consult-bot" onclick="toggleChatDrawer(true)">
+        <span>💬 Ask AI Advisor a Question</span>
+        <span class="action-arrow">➔</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Add Transaction Card -->
+  <section class="glass-card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-badge-icon">➕</div>
+        <div>
+          <h2>Record Transaction</h2>
+          <span class="card-description">Log incoming revenue or new category spending</span>
+        </div>
+      </div>
+      <span class="pill-chip blue">Live Sync</span>
+    </div>
+
+    <form method="post" action="{{ url_for('add_transaction') }}" class="modern-form" id="txForm">
+      <div class="form-row-compact">
+        <div class="form-group">
+          <label class="form-field-label" for="kind">Transaction Type</label>
+          <select name="kind" id="kind" class="form-input-field" onchange="updateCategoryOptions(this.value)">
+            <option value="expense" selected>💸 Expense</option>
+            <option value="income">💰 Income</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-field-label" for="amount">Amount (₹)</label>
+          <div class="currency-input-wrap">
+            <span class="currency-prefix">₹</span>
+            <input type="number" name="amount" id="amount" step="0.01" min="0.01" placeholder="e.g. 1500" required>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row-compact">
+        <div class="form-group">
+          <label class="form-field-label" for="category">Category</label>
+          <select name="category" id="category" class="form-input-field">
+            {% for c in expense_categories %}
+              <option value="{{ c }}">{{ cat_icons.get(c, '🏷️') }} {{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-field-label" for="date">Transaction Date</label>
+          <input type="date" name="date" id="date" value="{{ today_str }}" class="form-input-field" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-field-label" for="note">Note / Description (Optional)</label>
+        <input name="note" id="note" placeholder="e.g. Grocery store run, Dinner with friends, Freelance gig" class="form-input-field">
+      </div>
+
+      <button type="submit" class="btn btn-primary-glow btn-block">+ Save Transaction</button>
+    </form>
+  </section>
+</div>
+
+<!-- Middle Two-Column Grid: Budgets & Savings Goals -->
+<div class="two-col-grid">
+  <!-- Monthly Budgets Card -->
+  <section class="glass-card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-badge-icon">🎯</div>
+        <div>
+          <h2>Monthly Category Budgets</h2>
+          <span class="card-description">Set ceilings to prevent overspending</span>
+        </div>
+      </div>
+      <span class="pill-chip">Spending Caps</span>
+    </div>
+
+    <!-- Quick Add Budget Form -->
+    <form method="post" action="{{ url_for('save_budget') }}" class="budget-input-strip">
+      <select name="category" required class="budget-select">
+        {% for c in expense_categories %}
+          <option value="{{ c }}">{{ cat_icons.get(c, '🏷️') }} {{ c }}</option>
+        {% endfor %}
+      </select>
+      <input name="limit" type="number" min="1" step="1" placeholder="Limit ₹" required class="budget-input">
+      <button class="btn btn-secondary-compact">Set Budget</button>
+    </form>
+
+    <div class="budgets-scroll-list">
+      {% for b in budgets %}
+        <div class="budget-card-row {{ b.status }}">
+          <div class="budget-top-row">
+            <div class="budget-title-group">
+              <span class="budget-icon">{{ cat_icons.get(b.category, '🏷️') }}</span>
+              <strong class="budget-cat-name">{{ b.category }}</strong>
+              <span class="badge-threshold {{ b.status }}">
+                {% if b.status == 'danger' %}⚠️ Over by ₹{{ "%.0f"|format(b.spent - b.limit) }}
+                {% elif b.status == 'warning' %}⚡ {{ b.pct }}% Used
+                {% else %}✓ Safe
+                {% endif %}
+              </span>
+            </div>
+            <div class="budget-amounts">
+              <strong class="spent-val">₹{{ "%.0f"|format(b.spent) }}</strong>
+              <span class="limit-val">/ ₹{{ "%.0f"|format(b.limit) }}</span>
+            </div>
+          </div>
+
+          <div class="meter-bar-container">
+            <div class="meter-fill {{ b.status }}" style="width: {{ b.pct }}%"></div>
+          </div>
+
+          <div class="budget-bottom-row">
+            <span class="metric-caption">{{ b.pct }}% used • ₹{{ "%.0f"|format(b.remaining) }} remaining</span>
+            <form method="post" action="{{ url_for('delete_budget', bid=b.id) }}" onsubmit="return confirm('Delete budget for {{ b.category }}?');">
+              <button type="submit" class="btn-inline-delete" title="Delete budget">Remove</button>
+            </form>
+          </div>
+        </div>
+      {% else %}
+        <div class="empty-state-box">
+          <span class="empty-icon">📋</span>
+          <p class="empty-title">No category budgets yet</p>
+          <small class="empty-sub">Select an expense category above and set a monthly limit.</small>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Savings Goals Card -->
+  <section class="glass-card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-badge-icon">🏆</div>
+        <div>
+          <h2>Savings Goals & Milestones</h2>
+          <span class="card-description">Save for specific future milestones</span>
+        </div>
+      </div>
+      <span class="pill-chip green">Targets</span>
+    </div>
+
+    <!-- Quick Add Goal Form -->
+    <form method="post" action="{{ url_for('add_goal') }}" class="modern-form compact-goal-form">
+      <div class="form-row-compact">
+        <input name="name" placeholder="Goal (e.g. New Laptop)" required class="form-input-field">
+        <input name="target" type="number" min="1" step="1" placeholder="Target ₹" required class="form-input-field">
+      </div>
+      <div class="form-row-compact">
+        <input name="saved" type="number" min="0" step="1" placeholder="Initial Saved ₹ (0)" value="0" class="form-input-field">
+        <input name="deadline" type="date" title="Target Deadline Date" class="form-input-field">
+      </div>
+      <button class="btn btn-secondary-compact btn-block">+ Create Savings Goal</button>
+    </form>
+
+    <div class="goals-scroll-list">
+      {% for g in goals %}
+        <div class="goal-card-row {% if g.is_completed %}goal-achieved{% endif %}">
+          <div class="goal-top-row">
+            <div class="goal-title-group">
+              <span class="goal-trophy">{% if g.is_completed %}🎉{% else %}🎯{% endif %}</span>
+              <strong class="goal-name-text">{{ g.name }}</strong>
+              {% if g.is_completed %}
+                <span class="badge-threshold safe">Goal Achieved!</span>
+              {% elif g.deadline %}
+                <span class="deadline-pill">📅 Due {{ g.deadline }}</span>
+              {% endif %}
+            </div>
+            <div class="goal-amounts">
+              <strong class="goal-saved-val">₹{{ "%.0f"|format(g.saved) }}</strong>
+              <span class="goal-target-val">/ ₹{{ "%.0f"|format(g.target) }}</span>
+            </div>
+          </div>
+
+          <div class="meter-bar-container">
+            <div class="meter-fill {% if g.is_completed %}meter-success{% else %}meter-primary{% endif %}" style="width: {{ g.pct }}%"></div>
+          </div>
+
+          <div class="goal-bottom-row">
+            <span class="metric-caption">
+              {{ g.pct }}% saved
+              {% if not g.is_completed %}
+                • ₹{{ "%.0f"|format(g.remaining) }} to go
+              {% endif %}
+            </span>
+
+            <div class="goal-actions-group">
+              {% if not g.is_completed %}
+              <form method="post" action="{{ url_for('add_goal_saving', gid=g.id) }}" class="inline-deposit-form">
+                <input name="amount" type="number" min="1" step="1" placeholder="+ ₹" required class="deposit-input">
+                <button type="submit" class="btn btn-tiny-green">Add</button>
+              </form>
+              {% endif %}
+              <form method="post" action="{{ url_for('delete_goal', gid=g.id) }}" onsubmit="return confirm('Delete goal: {{ g.name }}?');">
+                <button type="submit" class="btn-inline-delete" title="Delete goal">Delete</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="empty-state-box">
+          <span class="empty-icon">🏁</span>
+          <p class="empty-title">No savings goals created</p>
+          <small class="empty-sub">Define a milestone above and watch your progress grow.</small>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<!-- Bottom Section: Transactions History Table -->
+<section class="glass-card table-section">
+  <div class="card-header table-header">
+    <div class="card-header-left">
+      <div class="card-badge-icon">📜</div>
+      <div>
+        <h2>Transactions Ledger</h2>
+        <span class="card-description">Showing {{ transactions|length }} of {{ total_tx_count }} records • Filterable & Exportable</span>
+      </div>
+    </div>
+    <div class="table-header-actions">
+      <button class="btn btn-secondary-compact" onclick="openTxModal()">+ Add</button>
+      <a class="btn btn-secondary-compact" href="{{ url_for('export_csv') }}">📥 Export CSV</a>
+      {% if total_tx_count == 0 %}
+        <a class="btn btn-primary-compact" href="{{ url_for('seed_demo_route') }}">⚡ Seed Demo Data</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Filter & Search Toolbar -->
+  <div class="filter-glass-bar">
+    <form method="get" action="{{ url_for('dashboard') }}" class="filter-form-row">
+      <div class="filter-chips-group">
+        <a href="{{ url_for('dashboard') }}" class="filter-pill {% if not kind_filter %}active{% endif %}">All</a>
+        <a href="{{ url_for('dashboard', kind='expense', category=category_filter, search=search_query) }}" class="filter-pill {% if kind_filter == 'expense' %}active{% endif %}">Expenses</a>
+        <a href="{{ url_for('dashboard', kind='income', category=category_filter, search=search_query) }}" class="filter-pill {% if kind_filter == 'income' %}active{% endif %}">Income</a>
+      </div>
+
+      <div class="filter-inputs-group">
+        <select name="category" class="filter-dropdown" onchange="this.form.submit()">
+          <option value="">All Categories</option>
+          {% for c in categories %}
+            <option value="{{ c }}" {% if category_filter == c %}selected{% endif %}>{{ cat_icons.get(c, '🏷️') }} {{ c }}</option>
+          {% endfor %}
+        </select>
+
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" name="search" id="liveSearchInput" class="filter-search-box" placeholder="Search notes..." value="{{ search_query }}">
+        </div>
+
+        <button type="submit" class="btn btn-filter-go">Apply</button>
+        {% if kind_filter or category_filter or search_query %}
+          <a href="{{ url_for('dashboard') }}" class="btn-clear-filter">Reset</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- Modern Responsive Table -->
+  <div class="modern-table-container">
+    <table class="fintech-table" id="txTable">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Category</th>
+          <th>Note / Description</th>
+          <th class="text-right">Amount</th>
+          <th style="width: 70px; text-align: center;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in transactions %}
+          <tr class="tx-row" data-kind="{{ t.kind }}" data-category="{{ t.category }}">
+            <td class="cell-date">
+              <span class="date-badge">{{ t.formatted_date }}</span>
+            </td>
+            <td>
+              <span class="tx-pill {{ t.kind }}">
+                {% if t.kind == 'income' %}↗ Income{% else %}↘ Expense{% endif %}
+              </span>
+            </td>
+            <td>
+              <span class="category-tag">
+                <span class="cat-icon">{{ cat_icons.get(t.category, '🏷️') }}</span>
+                <span class="cat-name">{{ t.category }}</span>
+              </span>
+            </td>
+            <td class="cell-note">{{ t.note or "—" }}</td>
+            <td class="cell-amount text-right {{ 'text-green' if t.kind == 'income' else 'text-red' }}">
+              {{ '+' if t.kind == 'income' else '−' }}₹{{ "%.2f"|format(t.amount) }}
+            </td>
+            <td class="text-center">
+              <form method="post" action="{{ url_for('delete_transaction', tid=t.id) }}" onsubmit="return confirm('Delete this transaction?');">
+                <button type="submit" class="btn-delete-icon" title="Delete transaction">🗑️</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6" class="table-empty-row">
+              <div class="empty-state-box">
+                <span class="empty-icon">💳</span>
+                <p class="empty-title">No transactions found</p>
+                <small class="empty-sub">
+                  {% if search_query or kind_filter or category_filter %}
+                    No records match your filter criteria. <a href="{{ url_for('dashboard') }}">Clear all filters</a>
+                  {% else %}
+                    No transactions recorded yet. <a href="{{ url_for('seed_demo_route') }}">Click here to seed sample demo data</a> or use the "+ Add" button above.
+                  {% endif %}
+                </small>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- System Architecture Diagram Card -->
+<section class="glass-card arch-section">
+  <div class="card-header">
+    <div class="card-header-left">
+      <div class="card-badge-icon">⚙️</div>
+      <div>
+        <h2>System Architecture & Security Flow</h2>
+        <span class="card-description">High-reliability layered system with hybrid AI engine</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="architecture-flow-diagram">
+    <div class="arch-node-box">
+      <div class="arch-node-title">Client Presentation</div>
+      <div class="arch-node-sub">HTML5 • Glassmorphism CSS3 • Vanilla JS • Chart.js</div>
+    </div>
+    <div class="arch-connector">↓ REST / JSON HTTP</div>
+    <div class="arch-node-box primary-node">
+      <div class="arch-node-title">Flask Application Server</div>
+      <div class="arch-node-sub">Routing • Validations • Template Globals • Security Sessions</div>
+    </div>
+    <div class="arch-connector">↓ Data & Intelligence Bus</div>
+    <div class="arch-tri-grid">
+      <div class="arch-leaf-box">
+        <span class="leaf-icon">🗄️</span>
+        <strong>SQLite Database</strong>
+        <p>SQLAlchemy ORM with Transactions, Budgets & Goals models</p>
+      </div>
+      <div class="arch-leaf-box highlight-leaf">
+        <span class="leaf-icon">🤖</span>
+        <strong>Dual AI Intelligence</strong>
+        <p>Google Gemini 2.5 Flash + Offline Local Rule Engine</p>
+      </div>
+      <div class="arch-leaf-box">
+        <span class="leaf-icon">📊</span>
+        <strong>Financial Analytics</strong>
+        <p>50/30/20 Rule Analyzer & Budget Limit Engine</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
