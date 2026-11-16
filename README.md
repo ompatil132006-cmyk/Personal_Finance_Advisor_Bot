@@ -125,3 +125,7 @@ Click the **"💬 AI Advisor Bot"** button on any page and try asking:
 - *"Check my budget status and tell me where I am overspending"*
 - *"What is my savings goal progress?"*
 - *"Give me an overall financial health summary"*
+
+## Documentation Link
+
+[https://github.com/ompatil132006-cmyk/Personal_Finance_Advisor_Bot/blob/main/Personal_Finance_Advisor_Bot_%20document_final.pdf]
